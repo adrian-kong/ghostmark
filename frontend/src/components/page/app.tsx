@@ -11,7 +11,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Copy, Download, Info } from "lucide-react";
+import { Copy, Download, Info, Sparkle } from "lucide-react";
 import { toast } from "sonner";
 import { Toaster } from "@/components/ui/sonner";
 import { Label } from "@/components/ui/label";
@@ -65,13 +65,8 @@ export default function WatermarkGenerator() {
         "http://localhost:8000/generate-fingerprints",
         {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            message: originalText,
-            count: numVersions,
-          }),
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ message: originalText, count: numVersions }),
         }
       );
 
@@ -120,12 +115,36 @@ export default function WatermarkGenerator() {
 
   return (
     <div className="container mx-auto max-w-screen-lg py-10 px-4">
-      <h1 className="text-3xl font-bold mb-6">Text Fingerprint Generator</h1>
-
       <div className="grid gap-6">
         <Card>
           <CardHeader>
-            <CardTitle>Original Text</CardTitle>
+            <div className="flex flex-row items-center justify-between">
+              <CardTitle>Text Fingerprint Generator</CardTitle>
+
+              <div className="flex flex-row items-center gap-2">
+                <Label htmlFor="num-versions" className="whitespace-nowrap">
+                  Number of Versions
+                </Label>
+                <Input
+                  id="num-versions"
+                  type="number"
+                  min="1"
+                  max="100"
+                  value={numVersions}
+                  onChange={(e) =>
+                    setNumVersions(Number.parseInt(e.target.value) || 5)
+                  }
+                />
+                <Button
+                  className="w-fit"
+                  onClick={generateFingerprints}
+                  disabled={!originalText || isLoading}
+                >
+                  <Sparkle className="h-4 w-4" />
+                  {isLoading ? "Generating..." : "Generate"}
+                </Button>
+              </div>
+            </div>
           </CardHeader>
           <CardContent>
             <Textarea
@@ -137,46 +156,9 @@ export default function WatermarkGenerator() {
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Generation Options</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="num-versions">Number of Versions</Label>
-                  <Input
-                    id="num-versions"
-                    type="number"
-                    min="1"
-                    max="100"
-                    value={numVersions}
-                    onChange={(e) =>
-                      setNumVersions(Number.parseInt(e.target.value) || 5)
-                    }
-                  />
-                </div>
-
-                <div className="flex items-end">
-                  <Button
-                    className="w-full"
-                    onClick={generateFingerprints}
-                    disabled={!originalText || isLoading}
-                  >
-                    {isLoading
-                      ? "Generating..."
-                      : "Generate Fingerprinted Versions"}
-                  </Button>
-                </div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
         {apiResponse && (
           <>
-            <Card>
+            {/* <Card>
               <CardHeader>
                 <CardTitle>Template & Paraphrasable Parts</CardTitle>
               </CardHeader>
@@ -232,7 +214,7 @@ export default function WatermarkGenerator() {
                   </Accordion>
                 </div>
               </CardContent>
-            </Card>
+            </Card> */}
 
             <Card>
               <CardHeader className="flex flex-row items-center justify-between">
@@ -256,34 +238,75 @@ export default function WatermarkGenerator() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {apiResponse.variants.map((variant, index) => (
-                      <TableRow key={index}>
-                        <TableCell className="font-mono">
-                          {variant.user}
-                        </TableCell>
-                        <TableCell className="max-w-[500px]">
-                          {variant.message}
-                        </TableCell>
-                        <TableCell className="space-x-2">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => copyToClipboard(variant.message)}
-                          >
-                            <Copy className="h-4 w-4 mr-2" />
-                            Copy Text
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => copyToClipboard(variant.token)}
-                          >
-                            <Info className="h-4 w-4 mr-2" />
-                            Copy Token
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                    ))}
+                    {apiResponse.variants.map((variant, index) => {
+                      // Create a highlighted version of the message
+                      let highlightedMessage = variant.message;
+
+                      // Highlight each paraphrasable part in the message
+                      apiResponse.paraphrasable_parts.forEach(
+                        (part, partIndex) => {
+                          // Check if the original or any alternative is in the message
+                          const allPossiblePhrases = [
+                            part.original,
+                            ...part.alternatives,
+                          ];
+
+                          // Find which phrase is used in this variant
+                          const usedPhrase = allPossiblePhrases.find((phrase) =>
+                            variant.message.includes(phrase)
+                          );
+
+                          if (usedPhrase) {
+                            // Determine if this is the original or an alternative
+                            const isOriginal = usedPhrase === part.original;
+
+                            // Create the highlighted version with appropriate styling
+                            const highlightClass = isOriginal
+                              ? "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-100"
+                              : "bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-100";
+
+                            // Replace the phrase with a highlighted version
+                            highlightedMessage = highlightedMessage.replace(
+                              usedPhrase,
+                              `<span class="px-1 rounded ${highlightClass}">${usedPhrase}</span>`
+                            );
+                          }
+                        }
+                      );
+
+                      return (
+                        <TableRow key={index}>
+                          <TableCell className="font-mono">
+                            {variant.user}
+                          </TableCell>
+                          <TableCell className="max-w-[500px] whitespace-pre-wrap">
+                            <div
+                              dangerouslySetInnerHTML={{
+                                __html: highlightedMessage,
+                              }}
+                            />
+                          </TableCell>
+                          <TableCell className="space-x-2">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => copyToClipboard(variant.message)}
+                            >
+                              <Copy className="h-4 w-4 mr-2" />
+                              Copy Text
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => copyToClipboard(variant.token)}
+                            >
+                              <Info className="h-4 w-4 mr-2" />
+                              Copy Token
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
                   </TableBody>
                 </Table>
               </CardContent>

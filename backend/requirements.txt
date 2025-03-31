@@ -1,3 +1,5 @@
 fastapi==0.114.0
 uvicorn==0.29.0
 python-dotenv==1.0.1
+google-genai===1.8.0
+pyjwt===2.10.1

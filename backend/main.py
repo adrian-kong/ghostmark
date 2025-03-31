@@ -36,7 +36,13 @@ def generate_fingerprints(input_data: MessageInput):
         token = create_signed_token(
             user=f"user_{len(variants)}", variant_id=len(variants), hash=variant["hash"]
         )
-        variants.append({"token": token, "message": variant["message"]})
+        variants.append(
+            {
+                "user": f"user_{len(variants)}",
+                "token": token,
+                "message": variant["message"],
+            }
+        )
 
     return {
         "template": template,

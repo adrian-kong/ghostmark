@@ -10,7 +10,7 @@ Yes, it even works for shared screenshots. But if someone paraphrases or multipl
 
 ## Demo
 
-[🎥 Watch demo 1](media/demo.mp4)
+https://github.com/user-attachments/assets/edb1854f-c585-493e-a16a-91b6969ac816
 
 ---
 

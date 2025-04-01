@@ -8,6 +8,12 @@ Yes, it even works for shared screenshots. But if someone paraphrases or multipl
 
 ---
 
+## Demo
+
+[🎥 Watch demo 1](media/demo.mov)
+
+---
+
 ## 🛠️ How to Run
 
 ### 1. Backend

@@ -1,15 +1,22 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from typing import List, Dict
 
 from llm.dummy_llm import DummyLLM
+from llm.gemini_llm import GeminiLLM
 
-# from llm.gpt_llm import GPTLLM
 from fingerprint import create_template, generate_variants, create_signed_token
 from config import JWT_SECRET
 
 import jwt
+import logging
+
+logging.basicConfig(
+    level=logging.INFO,  # or DEBUG for more detail
+    format="%(levelname)s - %(asctime)s - %(name)s - %(message)s",
+)
+
+logger = logging.getLogger(__name__)
 
 app = FastAPI()
 app.add_middleware(
@@ -21,8 +28,8 @@ app.add_middleware(
 )
 
 # Swap between LLM implementations
-llm = DummyLLM()
-# llm = GPTLLM(api_key="sk-...")
+# llm = DummyLLM()
+llm = GeminiLLM()
 
 
 class MessageInput(BaseModel):
@@ -41,15 +48,14 @@ def generate_fingerprints(input_data: MessageInput):
     variants = []
     while len(variants) < input_data.count:
         variant = next(raw_variants)
+        # TODO: allow input of real user ID
+        variant_id = len(variants)
+        user_tag = f"user_{variant_id}"
         token = create_signed_token(
-            user=f"user_{len(variants)}", variant_id=len(variants), hash=variant["hash"]
+            user=user_tag, variant_id=variant_id, hash=variant["hash"]
         )
         variants.append(
-            {
-                "user": f"user_{len(variants)}",
-                "token": token,
-                "message": variant["message"],
-            }
+            {"user": user_tag, "token": token, "message": variant["message"]}
         )
 
     return {

@@ -11,17 +11,12 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Copy, Download, Info, Sparkle } from "lucide-react";
+import { Copy, Download, Info, Sparkle, Search } from "lucide-react";
 import { toast } from "sonner";
 import { Toaster } from "@/components/ui/sonner";
 import { Label } from "@/components/ui/label";
-import {
-  Accordion,
-  AccordionContent,
-  AccordionItem,
-  AccordionTrigger,
-} from "@/components/ui/accordion";
-import { Badge } from "@/components/ui/badge";
+import SyntaxHighlighter from "react-syntax-highlighter";
+import { atomOneDark } from "react-syntax-highlighter/dist/esm/styles/hljs";
 
 interface ParaphrasablePart {
   original: string;
@@ -40,11 +35,75 @@ interface ApiResponse {
   variants: Variant[];
 }
 
+// hacky highlight POC
+function highlightDifferences(original: string, variant: string): string {
+  const originalWords = original.split(/(\s+)/);
+  const variantWords = variant.split(/(\s+)/);
+  const isDifferent: boolean[] = new Array(variantWords.length).fill(false);
+  if (originalWords.length !== variantWords.length) {
+    // Use a greedy approach to match up words
+    let origIndex = 0;
+    for (let i = 0; i < variantWords.length; i++) {
+      if (
+        origIndex < originalWords.length &&
+        variantWords[i] === originalWords[origIndex]
+      ) {
+        origIndex++;
+      } else {
+        const lookAhead = originalWords.indexOf(variantWords[i], origIndex);
+        if (lookAhead !== -1) {
+          for (let j = i; j < i + (lookAhead - origIndex); j++) {
+            if (j < variantWords.length) {
+              isDifferent[j] = true;
+            }
+          }
+          origIndex = lookAhead + 1;
+        } else {
+          isDifferent[i] = true;
+        }
+      }
+    }
+  } else {
+    for (let i = 0; i < variantWords.length; i++) {
+      if (variantWords[i] !== originalWords[i]) {
+        isDifferent[i] = true;
+      }
+    }
+  }
+
+  let result = "";
+  let inHighlight = false;
+
+  for (let i = 0; i < variantWords.length; i++) {
+    if (isDifferent[i] && !inHighlight) {
+      result +=
+        '<span class="px-1 rounded bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-100">';
+      inHighlight = true;
+    } else if (!isDifferent[i] && inHighlight) {
+      // End highlight
+      result += "</span>";
+      inHighlight = false;
+    }
+
+    result += variantWords[i];
+  }
+
+  // Close any open highlight span
+  if (inHighlight) {
+    result += "</span>";
+  }
+
+  return result;
+}
+
 export default function WatermarkGenerator() {
   const [originalText, setOriginalText] = useState("");
   const [numVersions, setNumVersions] = useState(5);
   const [isLoading, setIsLoading] = useState(false);
   const [apiResponse, setApiResponse] = useState<ApiResponse | null>(null);
+  const [leakToken, setLeakToken] = useState("");
+  const [leakResponse, setLeakResponse] = useState<any>(null);
+  const [isDetecting, setIsDetecting] = useState(false);
 
   // Call the backend API to generate fingerprinted variants
   const generateFingerprints = async () => {
@@ -113,6 +172,39 @@ export default function WatermarkGenerator() {
     toast.success("All fingerprinted versions downloaded as JSON.");
   };
 
+  // Detect leak source based on token
+  const detectLeak = async () => {
+    if (!leakToken) {
+      toast.error("Please enter a token to detect the leak source.");
+      return;
+    }
+
+    setIsDetecting(true);
+
+    try {
+      const response = await fetch(
+        `http://localhost:8000/detect-leak?token=${leakToken}`,
+        { method: "POST" }
+      );
+
+      if (!response.ok) {
+        throw new Error(`API error: ${response.status}`);
+      }
+
+      const data = await response.json();
+      setLeakResponse(data);
+
+      toast.success("Leak source detected.");
+    } catch (error) {
+      console.error("Error detecting leak:", error);
+      toast.error(
+        "Failed to detect leak source. Check the console for details."
+      );
+    } finally {
+      setIsDetecting(false);
+    }
+  };
+
   return (
     <div className="container mx-auto max-w-screen-lg py-10 px-4">
       <div className="grid gap-6">
@@ -156,66 +248,45 @@ export default function WatermarkGenerator() {
           </CardContent>
         </Card>
 
+        <Card>
+          <CardHeader>
+            <CardTitle>Detect Leak Source</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid gap-4">
+              <div className="flex items-end gap-2">
+                <div className="grid w-full gap-1.5">
+                  <Label htmlFor="leak-token">Token</Label>
+                  <Input
+                    id="leak-token"
+                    placeholder="Paste the fingerprint token here..."
+                    value={leakToken}
+                    onChange={(e) => setLeakToken(e.target.value)}
+                  />
+                </div>
+                <Button
+                  onClick={detectLeak}
+                  disabled={!leakToken || isDetecting}
+                >
+                  <Search className="h-4 w-4 mr-2" />
+                  {isDetecting ? "Detecting..." : "Detect"}
+                </Button>
+              </div>
+
+              {leakResponse && (
+                <div className="mt-4">
+                  <h3 className="text-sm font-medium mb-2">Result</h3>
+                  <SyntaxHighlighter language="json" style={atomOneDark}>
+                    {JSON.stringify(leakResponse, null, 2)}
+                  </SyntaxHighlighter>
+                </div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+
         {apiResponse && (
           <>
-            {/* <Card>
-              <CardHeader>
-                <CardTitle>Template & Paraphrasable Parts</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  <div>
-                    <h3 className="text-sm font-medium mb-2">
-                      Template Pattern
-                    </h3>
-                    <div className="p-3 bg-muted rounded-md font-mono text-sm">
-                      {apiResponse.template}
-                    </div>
-                  </div>
-
-                  <Accordion type="single" collapsible className="w-full">
-                    <AccordionItem value="paraphrasable-parts">
-                      <AccordionTrigger>
-                        Paraphrasable Parts (
-                        {apiResponse.paraphrasable_parts.length})
-                      </AccordionTrigger>
-                      <AccordionContent>
-                        <div className="space-y-4 mt-2">
-                          {apiResponse.paraphrasable_parts.map(
-                            (part, index) => (
-                              <div
-                                key={index}
-                                className="border rounded-md p-3"
-                              >
-                                <div className="font-medium mb-2">
-                                  Original:{" "}
-                                  <span className="font-normal">
-                                    {part.original}
-                                  </span>
-                                </div>
-                                <div>
-                                  <div className="text-sm text-muted-foreground mb-1">
-                                    Alternatives:
-                                  </div>
-                                  <div className="flex flex-wrap gap-2">
-                                    {part.alternatives.map((alt, altIndex) => (
-                                      <Badge key={altIndex} variant="outline">
-                                        {alt}
-                                      </Badge>
-                                    ))}
-                                  </div>
-                                </div>
-                              </div>
-                            )
-                          )}
-                        </div>
-                      </AccordionContent>
-                    </AccordionItem>
-                  </Accordion>
-                </div>
-              </CardContent>
-            </Card> */}
-
             <Card>
               <CardHeader className="flex flex-row items-center justify-between">
                 <CardTitle>Fingerprinted Versions</CardTitle>
@@ -239,39 +310,10 @@ export default function WatermarkGenerator() {
                   </TableHeader>
                   <TableBody>
                     {apiResponse.variants.map((variant, index) => {
-                      // Create a highlighted version of the message
-                      let highlightedMessage = variant.message;
-
-                      // Highlight each paraphrasable part in the message
-                      apiResponse.paraphrasable_parts.forEach(
-                        (part, partIndex) => {
-                          // Check if the original or any alternative is in the message
-                          const allPossiblePhrases = [
-                            part.original,
-                            ...part.alternatives,
-                          ];
-
-                          // Find which phrase is used in this variant
-                          const usedPhrase = allPossiblePhrases.find((phrase) =>
-                            variant.message.includes(phrase)
-                          );
-
-                          if (usedPhrase) {
-                            // Determine if this is the original or an alternative
-                            const isOriginal = usedPhrase === part.original;
-
-                            // Create the highlighted version with appropriate styling
-                            const highlightClass = isOriginal
-                              ? "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-100"
-                              : "bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-100";
-
-                            // Replace the phrase with a highlighted version
-                            highlightedMessage = highlightedMessage.replace(
-                              usedPhrase,
-                              `<span class="px-1 rounded ${highlightClass}">${usedPhrase}</span>`
-                            );
-                          }
-                        }
+                      // Create a highlighted version of the message that shows differences
+                      const highlightedMessage = highlightDifferences(
+                        originalText,
+                        variant.message
                       );
 
                       return (
